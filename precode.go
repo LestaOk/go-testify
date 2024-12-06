@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,80 +13,99 @@ import (
 )
 
 var cafeList = map[string][]string{
-    "moscow": []string{"Мир кофе", "Сладкоежка", "Кофе и завтраки", "Сытый студент"},
+	"moscow": []string{"Мир кофе", "Сладкоежка", "Кофе и завтраки", "Сытый студент"},
 }
 
 func mainHandle(w http.ResponseWriter, req *http.Request) {
-    countStr := req.URL.Query().Get("count")
-    if countStr == "" {
-        w.WriteHeader(http.StatusBadRequest)
-        w.Write([]byte("count missing"))
-        return
-    }
+	countStr := req.URL.Query().Get("count")
+	if countStr == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("count missing"))
+		return
+	}
 
-    count, err := strconv.Atoi(countStr)
-    if err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        w.Write([]byte("wrong count value"))
-        return
-    }
+	count, err := strconv.Atoi(countStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("wrong count value"))
+		return
+	}
 
-    city := req.URL.Query().Get("city")
+	city := req.URL.Query().Get("city")
 
-    cafe, ok := cafeList[city]
-    if !ok {
-        w.WriteHeader(http.StatusBadRequest)
-        w.Write([]byte("wrong city value"))
-        return
-    }
+	cafe, ok := cafeList[city]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("wrong city value"))
+		return
+	}
 
-    if count > len(cafe) {
-        count = len(cafe)
-    }
+	if count > len(cafe) {
+		count = len(cafe)
+	}
 
-    answer := strings.Join(cafe[:count], ",")
+	answer := strings.Join(cafe[:count], ",")
 
-    w.WriteHeader(http.StatusOK)
-    w.Write([]byte(answer))
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(answer))
 }
 
 func TestMainHandlerWhenCountMoreThanTotal(t *testing.T) {
-    totalCount := 4
-    req := httptest.NewRequest("GET", "/cafe?count=10&city=moscow", nil)
+	totalCount := 4
 
-    responseRecorder := httptest.NewRecorder()
-    handler := http.HandlerFunc(mainHandle)
-    handler.ServeHTTP(responseRecorder, req)
+	params := url.Values{}
+	params.Add("count", "10")
+	params.Add("city", "moscow")
 
-    require.NotEmpty(t, responseRecorder.Body)
-    assert.Equal(t, http.StatusOK, responseRecorder.Code)
+	queryString := params.Encode()
+	req := httptest.NewRequest("GET", "/cafe?"+queryString, nil)
 
-    body := responseRecorder.Body.String()
-    list := strings.Split(body, ",")
+	responseRecorder := httptest.NewRecorder()
+	handler := http.HandlerFunc(mainHandle)
+	handler.ServeHTTP(responseRecorder, req)
 
-    assert.Len(t, list, totalCount)
+	require.NotEmpty(t, responseRecorder.Body)
+	assert.Equal(t, http.StatusOK, responseRecorder.Code)
+
+	body := responseRecorder.Body.String()
+	list := strings.Split(body, ",")
+
+	assert.Len(t, list, totalCount)
 }
 
 func TestMainHandlerWhenCorrectRequest(t *testing.T) {
-    req := httptest.NewRequest("GET", "/cafe?count=1&city=moscow", nil)
+	params := url.Values{}
+	params.Add("count", "1")
+	params.Add("city", "moscow")
 
-    responseRecorder := httptest.NewRecorder()
-    handler := http.HandlerFunc(mainHandle)
-    handler.ServeHTTP(responseRecorder, req)
+	queryString := params.Encode()
+	req := httptest.NewRequest("GET", "/cafe?"+queryString, nil)
 
-    require.Equal(t, http.StatusOK, responseRecorder.Code)
-    assert.NotEmpty(t, responseRecorder.Body)
+	responseRecorder := httptest.NewRecorder()
+	handler := http.HandlerFunc(mainHandle)
+	handler.ServeHTTP(responseRecorder, req)
+
+	require.Equal(t, http.StatusOK, responseRecorder.Code)
+	require.NotEmpty(t, responseRecorder.Body)
+
+	expected := `Мир кофе`
+	assert.Equal(t, expected, responseRecorder.Body.String())
 }
 
 func TestMainHandlerWhenWrongCity(t *testing.T) {
-    req := httptest.NewRequest("GET", "/cafe?count=2&city=msk", nil)
+	params := url.Values{}
+	params.Add("count", "2")
+	params.Add("city", "msk")
 
-    responseRecorder := httptest.NewRecorder()
-    handler := http.HandlerFunc(mainHandle)
-    handler.ServeHTTP(responseRecorder, req)
+	queryString := params.Encode()
+	req := httptest.NewRequest("GET", "/cafe?"+queryString, nil)
 
-    require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+	responseRecorder := httptest.NewRecorder()
+	handler := http.HandlerFunc(mainHandle)
+	handler.ServeHTTP(responseRecorder, req)
 
-    expected := `wrong city value` 
-    assert.Equal(t, expected, responseRecorder.Body.String())
+	require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+
+	expected := `wrong city value`
+	assert.Equal(t, expected, responseRecorder.Body.String())
 }
